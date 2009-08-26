@@ -1,4 +1,5 @@
-# coding:utf-8
+#!/usr/bin/env python
+# -*- coding:gb18030 -*-
 
 from distutils.core import setup
 import py2exe
@@ -7,7 +8,7 @@ from SadFarmer import __VERSION__
 
 setup(
     version = __VERSION__,
-    description = "ä¼¤å¿ƒå†œæ°‘ for renren By Andelf",
+    description = u"ÉËÐÄÅ©Ãñ %s. By WangMaoMao" % __VERSION__,
     name = r"SadFarmer",
     options = {"py2exe": {"compressed": 1,
                           "optimize": 2,
