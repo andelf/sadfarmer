@@ -3,8 +3,8 @@
 #  FileName    : SadFarmer.py 
 #  Author      : WangMaoMao
 #  Created     : Tue Aug 25 19:15:47 2009 by Feather.et.ELF 
-#  Description : 校内(人人)开心农场辅助工具 伤心农民 0.1.6
-#  Time-stamp: <2009-08-27 00:46:42 andelf> 
+#  Description : 校内(人人)开心农场辅助工具 伤心农民 0.1.7
+#  Time-stamp: <2009-08-27 03:14:45 andelf> 
 
 
 
@@ -25,14 +25,17 @@ try:
 except:
     import Pickle
 
-__VERSION__ = '0.1.6'
+__VERSION__ = '0.1.7'
 
 defaultConfig = {"help-friends" : True,
                  "steal" : True,
                  "full-simulate" : False,
                  "cache-file" : "./farmer.cache",
-                 "sell-all" : False
+                 "sell-all" : False,
+                 "hide-username" : False,
+                 "afraid-of-dog" : False,
                  }
+setableTerms = ['help-friends', 'sell-all', 'full-simulate', 'steal', 'hide-username', 'afraid-of-dog']
 
 class HappyFarm(object):
     def __init__(self, email=None, password=None, autoInit=True, config=defaultConfig):
@@ -44,12 +47,13 @@ class HappyFarm(object):
         self._stateChanged = False        # 标志变量
         self.userList = []
         self.userDict = {}
+        self.userDogDict = {}
         self._profit = {'direction': u"合计:", 'harvest':0, 'money':0, 'exp':0, 'charm':0,
                         'crops' : defaultdict(int) }
         self.jsonDecode = simplejson.JSONDecoder(encoding='gb18030').decode
         cookie_handler = urllib2.HTTPCookieProcessor()
         self.opener = urllib2.build_opener(cookie_handler)
-        self.opener.addheaders = [('User-agent', 'Mozilla/5.0 SadFarmer/0.1 By WangMaoMao'),
+        self.opener.addheaders = [('User-agent', 'Mozilla/5.0 SadFarmer/%s By WangMaoMao' % (__VERSION__,) ),
                                   ('Referer', 'http://xn.cache.fminutes.com/images/v3/module/Main.swf?v=4'),
                                   ('x-flash-version', '11,0,32,18')] # flash 11 better?
         if email and password:
@@ -62,11 +66,14 @@ class HappyFarm(object):
                 os.system('pause')
                 exit(-1)
             self.opener.addheaders += [ ('Cookie', cookie) ]
+        if self.config['hide-username']:
+            self.id2userName = lambda _: "囧囧囧"
         if autoInit:
             self.initFarm()
     def initFarm(self):
         self._initMyInfo()
-        self._initShopInfo()
+        if not self._loadCache():  # 缓存载入失败
+            self._initShopInfo()
         self.updateMyPackage()
         self.updateAllFarms()
         self._timeStamp = self.now()
@@ -83,8 +90,11 @@ class HappyFarm(object):
         self._timeDelta = int(time.time() - res['serverTime']['time'])
         logging.info("时间同步成功. 时差为 %d.", self._timeDelta)
     def updateFarm(self, ownerId=0):
+        if ownerId == self._uid:
+            ownerId = 0
         res = self.request( self.buildUrl('user', 'run', 1),
                             {'ownerId': ownerId} )
+        self.userDogDict[self._uid] = res['dog']
         if ownerId== 0:
             self._farmlandsStatus[self._uid] = res['farmlandStatus']
             self._farmlandStatus = res['farmlandStatus']
@@ -98,7 +108,7 @@ class HappyFarm(object):
     def updateMyPackage(self):
         res = self.request( self.buildUrl('Package', 'getPackageInfo') )
         logging.info("更新背包信息 类型1(种子).")
-        for i in res.get('1', []):  # May fail, so use get()
+        for i in res.get('1', []):  # May fail, so use get() 
             logging.info("%s %d 个", i['cName'].encode('gb18030'), int(i['amount']) )
         self._packageInfo = res.get('1', [])
         
@@ -128,40 +138,41 @@ class HappyFarm(object):
             db.close()
         except:
             logging.warning("缓存文件写入失败.")
+    def _loadCache(self, user=True, env=True):
+        try:
+            logging.info("尝试从缓存载入信息....")
+            data = self._readCache()
+            assert len(data.shopInfo)> 0
+            self._shopInfo = data.shopInfo
+            assert data[self.email]['userList']>= 1
+            self.userList = data[self.email]['userList']
+            self.userDict = data[self.email]['userDict']
+            self.userDogDict = data[self.email]['userDogDict']
+            logging.info("载入 %d 条用户信息.", len(self.userList))
+            return True
+        except:
+            logging.warning("载入失败!")
+            return False
+                        
     def saveToCache(self, user=True, env=True):
         if user:
-            self._writeCache(dict(userList=self.userList, userDict=self.userDict))
+            self._writeCache(dict(userList=self.userList, userDict=self.userDict, userDogDict=self.userDogDict))
         if env:
             self._writeCache(dict(shopInfo=self._shopInfo), isUserData=False)
     def _initShopInfo(self):
-        data = self._readCache(key='shopInfo')
-        if data:
-            self._shopInfo = data
-        else:
-            res = self.request( self.buildUrl('shop', 'getShopInfo', type=[1]) )
-            self._shopInfo = res.get('1', [])
-            self.saveToCache(user=False, env=True)
+        res = self.request( self.buildUrl('shop', 'getShopInfo', type=[1]) )
+        self._shopInfo = res.get('1', [])
+        self.saveToCache(user=False, env=True)
         logging.info("初始化商店物品 类型1(种子).")
         logging.info("得到 %d 个种子信息.", len(self._shopInfo))
         
     def _initUserInfo(self):
-        data = self._readCache(key=self.email)
-        if data:
-            try:
-                assert data['userList']>= 1
-                self.userList = data['userList']
-                self.userDict = data['userDict']
-                logging.info("加载成功. 获得 %d 用户.", len(self.userList))
-                return
-            except:
-                pass
-        logging.warning("缓存读取失败. 尝试网络获取.")
         res = self.request( self.buildUrl('friend'),
                             {'fv': 0,
                              'refresh': 'true'} )
         res = res['data'] if 'data' in res else res
         # res = res['data'] # fuck ? server modified?
-        self.userList = [int(f['userId']) for f in res if int(f['exp'])!= 0] # note: last is mine
+        self.userList = [int(f['userId']) for f in res if int(f['exp'])> 200] # note: last is mine
         self.userDict = dict([(int(f['userId']), f) for f in res if int(f['exp'])!= 0])
         logging.info("获得 %d 用户.", len(self.userList))
         self.saveToCache(user=True, env=False)
@@ -261,6 +272,8 @@ class HappyFarm(object):
     def doMisc(self, ownerId=None, autoRefresh=True):
         ownerId = ownerId if ownerId else self._uid
         for i, land in enumerate( self._farmlandsStatus[ownerId] ):
+            if land['b']>= 6: # 成熟或者枯萎
+                continue
             if land['h'] == 0: # 干旱
                 self._stateChanged = True
                 logging.info("用户 %s(id:%d) 土地%d %s 干旱. 帮助浇水!", self.id2userName(ownerId),
@@ -280,7 +293,7 @@ class HappyFarm(object):
                                      'ownerId': ownerId,
                                      'place'  : i } )
                 self.log(res)
-            for _ in xrange( land['f'] ): # 草数, FIXME: 可能不对
+            for _ in xrange( land['f'] ): # 草数
                 self._stateChanged = True
                 logging.info("用户 %s(id:%d) 土地%d %s 长草. 帮助除草!", self.id2userName(ownerId),
                              ownerId, i, self.id2cName(land['a']))
@@ -296,10 +309,13 @@ class HappyFarm(object):
     def scrounge(self, ownerId, autoRefresh=True): # 偷菜
         if ownerId == self._uid or ownerId == 235795214:
             return # 不偷自己的
+        if self.config['afraid-of-dog'] and self.userDogDict[ownerId]['dogFeedTime'] > self.now():
+            logging.info("用户 %s(id:%d) 土地%d %s 的狗狗正在活动中. 放弃偷窃.", self.id2userName(ownerId),
+                             ownerId, i, self.id2cName(land['a']))
         for i, land in enumerate( self._farmlandsStatus[ownerId] ):
             if land['b'] == 6 and land['m'] > land['l'] and land['n']>=2:
                 self._stateChanged = True
-                logging.info("用户 %s(id:%d) 土地%d[%s] 可偷窃.", self.id2userName(ownerId),
+                logging.info("用户 %s(id:%d) 土地%d %s 可偷窃.", self.id2userName(ownerId),
                              ownerId, i, self.id2cName(land['a']))
                 res = self.request( self.buildUrl('farmlandstatus', 'scrounge'),
                                     {'ownerId': ownerId,
@@ -310,6 +326,7 @@ class HappyFarm(object):
         self._stateChanged = False
 
     def runSimple(self):
+        logging.info("执行 runSimple 策略.")
         if not self.inited:
             self.initFarm()
         self.harvest()
@@ -323,10 +340,10 @@ class HappyFarm(object):
             if self.config['steal']:
                 self.scrounge(i)
         self._timeStamp = self.now()
+        self.logProfit()
         if self.config['sell-all']:
             self.sell()
-
-        # adds more here
+        logging.info("执行 runSimple 策略结束.")
     def refresh(self):
         self.updateAllFarms()
         self.updateMyPackage()
@@ -394,7 +411,30 @@ class HappyFarm(object):
         for i in xrange(100):
             if i*(i+1)>= exp:
                 return i-1
-
+    def id2userDetail(self, uid=None):
+        uid = int(uid) if uid else self._uid
+        detail = []
+        dogFeedTime = self.userDogDict[uid]['dogFeedTime']
+        detail.append("用户名: %s(id:%d) 经验: %5d 等级: %2d 狗狗活动到: %s" %
+                      (self.id2userName(uid), uid, self.userDict[uid]['exp'], self.id2level(uid),
+                       time.ctime(dogFeedTime) if dogFeedTime else "无"))
+        for i,land in enumerate(self._farmlandsStatus):
+            landDetail = ["土地%d", self.id2cName(land['a'])]
+            landDetail.append(["空地", "生长中", "小叶子", "大叶子", "开花", "结果", "成熟", "枯萎"][land['b']])
+            if land['f']:
+                landDetail.append("杂草: %d棵" % land['f'])
+            if land['g']:
+                landDetail.append("小虫子: %d条" % land['g'])
+            if land['t']:
+                landDetail.append("大青虫血量: %d/5" % land['t'])
+            if land['h']== 0:
+                landDetail.append("干旱")
+            if land['b']== 6 and land['n']>= 2:
+                landDetail.append("可偷")
+            if land['r']!= land['q'] and land['r'] < self.now():
+                landDetail.append("升级时间: %s" % time.ctime(land['r']))
+            detail.append(' '.join(landDetail))
+        return '\n'.join(detail)
     def login(self, email, password):
         logging.info("模拟页面登陆... 用户: %s.", email)
         url = "http://login.renren.com/Login.do"
@@ -481,7 +521,7 @@ class HappyFarm(object):
 __doc__ = ('='*80 + \
 """                伤心农民 %s for renren.com
                     By 王猫猫(andelf@gmail.com)
-                    Wed Aug 26 19:03:43 2009
+                    Thu Aug 27 03:14:43 2009
                  #使用本程序所引起的任何后果, 本人不负责#
                       请不要频繁执行, 防止被封号!
                   使用方法:
@@ -495,6 +535,7 @@ if __name__ == '__main__':
     print __doc__
     from optparse import OptionParser
     usage = "usage: %prog [options]"
+
     parser = OptionParser(usage=usage, version="%prog " + __VERSION__)
     parser.add_option("-f", "--log", "--log-file", default="./sadfarmer.log",
                       action="store", type="string", dest="logfile", metavar="FILENAME",
@@ -510,11 +551,11 @@ if __name__ == '__main__':
                       help=u"用户密码")
     parser.add_option("-e", "--enable",
                       action="append", dest="farmOption", metavar="TERM",
-                      choices=['help-friends', 'sell-all', 'full-simulate', 'steal'], default=[],
+                      choices=setableTerms, default=[],
                       help=u"打开设置 TERM")
-    parser.add_option("-d", "-no", "--disable",
+    parser.add_option("-d", "--disable", "--no",
                       action="append", dest="farmOptionDisable", metavar="TERM",
-                      choices=['help-friends', 'sell-all', 'full-simulate', 'steal'], default=[],
+                      choices=setableTerms, default=[],
                       help=u"关闭设置 TERM 高优先级")
     (options, args) = parser.parse_args()
 
@@ -538,6 +579,5 @@ if __name__ == '__main__':
 
     logging.info("================ 程序启动 ==================")
     h = HappyFarm(options.email, options.password)
-    logging.info("执行 runSimple 策略.")
+    
     h.runSimple()
-    h.logProfit()
