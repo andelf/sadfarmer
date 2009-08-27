@@ -4,7 +4,7 @@
 #  Author      : WangMaoMao
 #  Created     : Tue Aug 25 19:15:47 2009 by Feather.et.ELF 
 #  Description : 校内(人人)开心农场辅助工具 伤心农民 0.1.7
-#  Time-stamp: <2009-08-27 03:14:45 andelf> 
+#  Time-stamp: <2009-08-27 15:36:13 andelf> 
 
 
 
@@ -17,9 +17,10 @@ import simplejson
 import md5
 import logging
 import re
-import os
+from os import system
 from sys import exit
 from collections import defaultdict
+from itertools import imap
 try:
     import cPickle as Pickle
 except:
@@ -34,11 +35,14 @@ defaultConfig = {"help-friends" : True,
                  "sell-all" : False,
                  "hide-username" : False,
                  "afraid-of-dog" : False,
+                 "init-all-farms" : False,
+                 "log-land-info" : True
                  }
-setableTerms = ['help-friends', 'sell-all', 'full-simulate', 'steal', 'hide-username', 'afraid-of-dog']
+setableTerms = ['help-friends', 'sell-all', 'full-simulate', 'steal', 'hide-username',
+                'afraid-of-dog', 'init-all-farms', 'log-land-info']
 
 class HappyFarm(object):
-    def __init__(self, email=None, password=None, autoInit=True, config=defaultConfig):
+    def __init__(self, email=None, password=None, config=defaultConfig):
         self.email = email
         self.config = config
         self.inited = False
@@ -48,6 +52,7 @@ class HappyFarm(object):
         self.userList = []
         self.userDict = {}
         self.userDogDict = {}
+        self._farmlandsStatus = {}
         self._profit = {'direction': u"合计:", 'harvest':0, 'money':0, 'exp':0, 'charm':0,
                         'crops' : defaultdict(int) }
         self.jsonDecode = simplejson.JSONDecoder(encoding='gb18030').decode
@@ -63,48 +68,48 @@ class HappyFarm(object):
                 cookie = self.getCookieViaCOM()
             except :
                 logging.error("无法通过 COM 连接获得用户信息!")
-                os.system('pause')
+                system('pause')
                 exit(-1)
             self.opener.addheaders += [ ('Cookie', cookie) ]
         if self.config['hide-username']:
             self.id2userName = lambda _: "囧囧囧"
-        if autoInit:
-            self.initFarm()
+        self.initFarm()
     def initFarm(self):
         self._initMyInfo()
+        self.updateMyPackage()
         if not self._loadCache():  # 缓存载入失败
             self._initShopInfo()
-        self.updateMyPackage()
-        self.updateAllFarms()
-        self._timeStamp = self.now()
-        self.inited = True
+            self._initUserInfo()
+        if self.config['init-all-farms']:
+            self.updateAllFarms()
+            self._timeStamp = self.now()
+            self.inited = True
     def _initMyInfo(self):
         res = self.request( self.buildUrl('user', 'run') )
         logging.info("初始化自己农场信息.")
-        logging.info("用户: %s 服务器时间: %d 土地数: %d.",
+        logging.info("用户 %s 个人信息获取成功. 服务器时间: %d 土地数: %d.",
                      res.get('user', {}).get('userName', 0).encode('gb18030'),
                      res.get('serverTime', {}).get('time', 0),
                      len(res.get('farmlandStatus', [])) )
         self._uid = res['user']['uId']
         self._farmlandStatus = res['farmlandStatus'] # or needless
+        self._farmlandsStatus[self._uid] = self._farmlandStatus
         self._timeDelta = int(time.time() - res['serverTime']['time'])
         logging.info("时间同步成功. 时差为 %d.", self._timeDelta)
     def updateFarm(self, ownerId=0):
-        if ownerId == self._uid:
-            ownerId = 0
+        uid = self._uid if ownerId== 0 else ownerId
         res = self.request( self.buildUrl('user', 'run', 1),
                             {'ownerId': ownerId} )
-        self.userDogDict[self._uid] = res['dog']
-        if ownerId== 0:
-            self._farmlandsStatus[self._uid] = res['farmlandStatus']
+        self.userDogDict[uid] = res['dog']
+        self._farmlandsStatus[uid] = res['farmlandStatus']
+        if uid== self._uid:
             self._farmlandStatus = res['farmlandStatus']
             logging.info("更新自己农场信息. 土地数: %d.", len(res['farmlandStatus']) )
         else:
-            self._farmlandsStatus[ownerId] = res['farmlandStatus']
             logging.info("更新用户 %s(id:%s) 农场信息. 土地数: %d.",
                          self.id2userName(ownerId),
                          str(ownerId), len(res['farmlandStatus']) )
-
+            
     def updateMyPackage(self):
         res = self.request( self.buildUrl('Package', 'getPackageInfo') )
         logging.info("更新背包信息 类型1(种子).")
@@ -143,7 +148,7 @@ class HappyFarm(object):
             logging.info("尝试从缓存载入信息....")
             data = self._readCache()
             assert len(data.shopInfo)> 0
-            self._shopInfo = data.shopInfo
+            self._shopInfoDict = data['shopInfoDict']
             assert data[self.email]['userList']>= 1
             self.userList = data[self.email]['userList']
             self.userDict = data[self.email]['userDict']
@@ -158,13 +163,13 @@ class HappyFarm(object):
         if user:
             self._writeCache(dict(userList=self.userList, userDict=self.userDict, userDogDict=self.userDogDict))
         if env:
-            self._writeCache(dict(shopInfo=self._shopInfo), isUserData=False)
+            self._writeCache(dict(shopInfoDict=self._shopInfoDict), isUserData=False)
     def _initShopInfo(self):
         res = self.request( self.buildUrl('shop', 'getShopInfo', type=[1]) )
-        self._shopInfo = res.get('1', [])
+        self._shopInfoDict = dict([(i['cId'], i) for i in res.get('1', [])])
         self.saveToCache(user=False, env=True)
         logging.info("初始化商店物品 类型1(种子).")
-        logging.info("得到 %d 个种子信息.", len(self._shopInfo))
+        logging.info("得到 %d 个种子信息.", len(self._shopInfoDict.keys()))
         
     def _initUserInfo(self):
         res = self.request( self.buildUrl('friend'),
@@ -184,6 +189,8 @@ class HappyFarm(object):
             self.updateFarm(uid)
         logging.info("获得 %d 个用户农场信息.", len(self.userList))
         self._farmlandStatus = self._farmlandsStatus[self._uid]
+        self.saveToCache(user=True, env=False)  # save dog info~ maybe
+        self.inited = True
     def sell(self, all=True, cId=0, number=1):
         ownerId = self._uid
         if not self.config['sell-all']:
@@ -212,7 +219,7 @@ class HappyFarm(object):
             self.updateFarm()
         self._stateChanged = False
     def buy(self, howMany=1, id=None, type=1):
-        if not id:
+        if not id: # TODO: auto buy highest
             logging.warning("由于王猫猫喜欢玫瑰, 所以你也必须种玫瑰!")
             id = 101
             type = 1
@@ -223,10 +230,8 @@ class HappyFarm(object):
                              'type' : type,
                              'number' : howMany } )
         self.log(res)
-        
-    def scarify(self, ownerId=None, autoRefresh=True):  # 铲除
-        ownerId = ownerId if ownerId else self._uid
-        # scarify my only
+    def scarify(self, autoRefresh=True):  # 铲除
+        ownerId = self._uid # scarify my only
         for i, land in enumerate(self._farmlandStatus):
             if land['b'] == 7: # 枯根状态
                 self._stateChanged = True
@@ -239,8 +244,8 @@ class HappyFarm(object):
             self.updateFarm()
         self._stateChanged = False
 
-    def planting(self, ownerId=None, autoRefresh=True):
-        ownerId = ownerId if ownerId else self._uid
+    def planting(self, autoRefresh=True):
+        ownerId = self._uid
         emptyLands = [i for i,land in enumerate(self._farmlandStatus) if land['b']==0]
         seedNeeded = len(emptyLands)
         if seedNeeded<= 0:
@@ -268,6 +273,20 @@ class HappyFarm(object):
         self.updateMyPackage()
         if autoRefresh:
             self.updateFarm() # default to mine
+    def farmlandsStatusGenerator(self, filterFun=lambda farmer:farmer['exp']>= 200):
+        for ownerId in self.userList:
+            res = self.request( self.buildUrl('user', 'run', 1),
+                                {'ownerId': ownerId} )
+            self.userDogDict[ownerId] = res['dog']
+            self._farmlandsStatus[ownerId] = res['farmlandStatus']
+            if ownerId== self._uid:
+                self._farmlandStatus = res['farmlandStatus']
+            if filterFun(res):
+                yield (ownerId, res['farmlandStatus'])
+        self._timeStamp = self.now()
+        self.saveToCache(user=True, env=False)
+        self.inited = True
+        # raise StopIteration
         
     def doMisc(self, ownerId=None, autoRefresh=True):
         ownerId = ownerId if ownerId else self._uid
@@ -328,13 +347,21 @@ class HappyFarm(object):
     def runSimple(self):
         logging.info("执行 runSimple 策略.")
         if not self.inited:
-            self.initFarm()
+            self.updateFarm()  # update My
+        if self.config['log-land-info']:
+            self.id2userDetail(self._uid)
         self.harvest()
         self.scarify()
         self.planting()
         self.doMisc()
         # self._doMisc()
-        for i in self.userList:
+        if self.config['init-all-farms']:
+            gen = self.userList
+        else:
+            gen = imap(lambda i:i[0], self.farmlandsStatusGenerator())
+        for i in gen:
+            if self.config['log-land-info']:
+                logging.info(self.id2userDetail(i))
             if self.config['help-friends']:
                 self.doMisc(i, autoRefresh=False) # 先做好事后偷人 
             if self.config['steal']:
@@ -354,7 +381,7 @@ class HappyFarm(object):
         if 'direction' in res:
             message.append(res['direction'].encode('gb18030'))
         if 'harvest' in res:
-            message.append("收获 %s" % str(res['harvest']) )
+            message.append("收获 %d" % int(res['harvest']) )
             self._profit['harvest'] += int(res['harvest'])
             if 'status' in res:
                 self._profit['crops'][int(res['status']['cId'])] += int(res['harvest'])
@@ -362,15 +389,15 @@ class HappyFarm(object):
         if 'cName' in res:
             message.append(res['cName'].encode('gb18030'))
         if 'num' in res:
-            message.append("%s 个" % str(res['num']))
+            message.append("%d 个" % int(res['num']))
         if 'money' in res:
             message.append("金钱 %s" % str(res['money']))
             self._profit['money'] += int(res['money'])
         if 'exp' in res:
-            message.append("经验 %s" % str(res['exp']) )
+            message.append("经验 %d" % int(res['exp']) )
             self._profit['exp'] += int(res['exp'])
         if 'charm' in res:
-            message.append("魅力 %s" % str(res['charm']) )
+            message.append("魅力 %d" % int(res['charm']) )
             self._profit['charm'] += int(res['charm'])
         message.append(additionalInfo)
         logging.info( (' '.join(message)).strip())
@@ -390,49 +417,63 @@ class HappyFarm(object):
         self.log(self._profit)
         self._profit = {'direction': u"合计:", 'harvest':0, 'money':0, 'exp':0, 'charm':0,
                         'crops' : defaultdict(int) } # re_init
-    def id2cName(self, cid): # corn name
-        cid = int(cid)
+    def id2cName(self, cId): # corn name
+        cId = int(cId)
         try:
-            return [c['cName'].split()[0] for c in self._shopInfo if c['cId']==cid][0].encode('gb18030')
+            return (self._shopInfoDict[cId]['cName'].split()[0]).encode('gb18030')
         except:
-            return "cID#%d" % cid
-    def id2money(self, cid, num=1):
-        cid = int(cid)
+            return "cID#%d" % cId
+    def id2money(self, cId, num=1):
+        cId = int(cId)
         try:
-            return [int(c['sale'])*num for c in self._shopInfo if c['cId']==cid][0]
+            return int(self._shopInfoDict[cId]['sale']) * num
         except:
             return 0
     def id2userName(self, uid):
-        return self.userDict.get(int(uid), {}).get('userName', u'囧').encode('gb18030')
+        return self.userDict.get(int(uid), {}).get('userName', u'囧囧囧').encode('gb18030')
 
     def id2level(self, uid=None):
         uid = int(uid) if uid else self._uid
-        exp = self.userDict[uid]['exp']
+        exp = int(self.userDict[uid]['exp']) # some user this field contain str
         for i in xrange(100):
-            if i*(i+1)>= exp:
+            if i*(i+1)*100>= exp:
                 return i-1
     def id2userDetail(self, uid=None):
         uid = int(uid) if uid else self._uid
-        detail = []
-        dogFeedTime = self.userDogDict[uid]['dogFeedTime']
-        detail.append("用户名: %s(id:%d) 经验: %5d 等级: %2d 狗狗活动到: %s" %
-                      (self.id2userName(uid), uid, self.userDict[uid]['exp'], self.id2level(uid),
-                       time.ctime(dogFeedTime) if dogFeedTime else "无"))
-        for i,land in enumerate(self._farmlandsStatus):
-            landDetail = ["土地%d", self.id2cName(land['a'])]
-            landDetail.append(["空地", "生长中", "小叶子", "大叶子", "开花", "结果", "成熟", "枯萎"][land['b']])
-            if land['f']:
-                landDetail.append("杂草: %d棵" % land['f'])
-            if land['g']:
-                landDetail.append("小虫子: %d条" % land['g'])
-            if land['t']:
-                landDetail.append("大青虫血量: %d/5" % land['t'])
-            if land['h']== 0:
-                landDetail.append("干旱")
-            if land['b']== 6 and land['n']>= 2:
-                landDetail.append("可偷")
-            if land['r']!= land['q'] and land['r'] < self.now():
-                landDetail.append("升级时间: %s" % time.ctime(land['r']))
+        logging.debug(uid)
+        detail = [""]
+        dogFeedTime = int(self.userDogDict[uid]['dogFeedTime'])
+        detail.append("用户名: %s(id:%d) 经验: %5d 等级: %2d 狗狗活动: %s." %
+                      (self.id2userName(uid), uid, int(self.userDict[uid]['exp']), self.id2level(uid),
+                       time.strftime("%m-%d %H:%M:%S", time.localtime(dogFeedTime)) \
+                             if dogFeedTime> self.now() else "不活动"))
+        for i,land in enumerate(self._farmlandsStatus[uid]):
+            landDetail = ["土地%-2d" % i]
+            if land['b']!= 0:
+                landDetail.append(self.id2cName(land['a']))
+            landDetail.append([" 空地 ", "生长中", "小叶子", "大叶子", " 开花 ", " 结果 ", " 成熟 ", " 枯萎 "][land['b']])
+            if land['r']== land['q']:
+                landDetail[-1] = " 发芽 "
+            else:
+                if 0< land['b']< 6:
+                    if land['r'] < self.now():
+                        cId = land['a']
+                        t = land['r'] + int(self._shopInfoDict.get(cId, {}).get('growthCycle', -1000000))
+                        if t>= self.now():
+                            #t+= self._shopInfoDict[cId]
+                            landDetail.append("作物成熟时间: %s" % \
+                                              time.strftime("%m-%d %H:%M:%S", time.localtime(t)))
+                    if land['h']== 0:
+                        landDetail.append("干旱")
+                    if land['f']:
+                        landDetail.append("杂草: %d棵" % land['f'])
+                    if land['g']:
+                        landDetail.append("小虫子: %d条" % land['g'])
+                    if land['t']:
+                        landDetail.append("大青虫血量: %d/5" % land['t'])
+                if land['b']== 6:
+                    landDetail.append("剩余果实: %d" % land['m'])
+                    landDetail.append("可偷窃" if land['n']>= 2 and land['m']> land['l'] else "不可偷")
             detail.append(' '.join(landDetail))
         return '\n'.join(detail)
     def login(self, email, password):
@@ -445,7 +486,7 @@ class HappyFarm(object):
         url = re.findall(r'<iframe name="iframe_canvas" src="([^"]+)"', res)
         if not url:
             logging.error("用户名/密码错误!")
-            os.system('pause')
+            system('pause')
             exit(-1)
         url = url[0]
         url = url.replace('amp;', '').replace('?', '/?')
@@ -521,7 +562,7 @@ class HappyFarm(object):
 __doc__ = ('='*80 + \
 """                伤心农民 %s for renren.com
                     By 王猫猫(andelf@gmail.com)
-                    Thu Aug 27 03:14:43 2009
+                    Thu Aug 27 15:29:14 2009
                  #使用本程序所引起的任何后果, 本人不负责#
                       请不要频繁执行, 防止被封号!
                   使用方法:
@@ -581,3 +622,5 @@ if __name__ == '__main__':
     h = HappyFarm(options.email, options.password)
     
     h.runSimple()
+    system('pause')
+
