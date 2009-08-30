@@ -5,3 +5,4 @@ build/*
 *.pyo
 *.log
 *.cache
+*.txt

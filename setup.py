@@ -4,11 +4,11 @@
 from distutils.core import setup
 import py2exe
 
-from SadFarmer import __VERSION__
+from SadFarmer import __VERSION__, __DEV_STATUS__
 
 setup(
     version = __VERSION__,
-    description = u"伤心农民 %s. By WangMaoMao" % __VERSION__,
+    description = u"伤心农民 %s(%s). By WangMaoMao" % (__VERSION__, __DEV_STATUS__)
     name = r"SadFarmer",
     options = {"py2exe": {"compressed": 1,
                           "optimize": 2,

@@ -3,10 +3,16 @@
 #  FileName    : SadFarmer.py 
 #  Author      : WangMaoMao
 #  Created     : Tue Aug 25 19:15:47 2009 by Feather.et.ELF 
-#  Description : 校内(人人)开心农场辅助工具 伤心农民 0.1.7
-#  Time-stamp: <2009-08-27 15:36:13 andelf> 
+#  Description : 校内(人人)开心农场辅助工具 伤心农民 0.1.8
+#  Time-stamp: <2009-08-30 00:51:06 andelf> 
 
-
+# fix py2.6 logging codec error
+import os
+if os.name== 'nt':
+    import sys
+    import site
+    reload(sys)
+    sys.setdefaultencoding('gb18030')
 
 import socket
 socket.setdefaulttimeout(10.0)
@@ -26,7 +32,8 @@ try:
 except:
     import Pickle
 
-__VERSION__ = '0.1.7'
+__VERSION__ = '0.1.8'
+__DEV_STATUS__ = ['development', 'beta', 'release'][0] # always modify this
 
 defaultConfig = {"help-friends" : True,
                  "steal" : True,
@@ -36,10 +43,12 @@ defaultConfig = {"help-friends" : True,
                  "hide-username" : False,
                  "afraid-of-dog" : False,
                  "init-all-farms" : False,
-                 "log-land-info" : True
+                 "log-land-info" : True,
+                 "auto-nohelp" : True,
                  }
+
 setableTerms = ['help-friends', 'sell-all', 'full-simulate', 'steal', 'hide-username',
-                'afraid-of-dog', 'init-all-farms', 'log-land-info']
+                'afraid-of-dog', 'init-all-farms', 'log-land-info', 'auto-nohelp']
 
 class HappyFarm(object):
     def __init__(self, email=None, password=None, config=defaultConfig):
@@ -58,9 +67,10 @@ class HappyFarm(object):
         self.jsonDecode = simplejson.JSONDecoder(encoding='gb18030').decode
         cookie_handler = urllib2.HTTPCookieProcessor()
         self.opener = urllib2.build_opener(cookie_handler)
-        self.opener.addheaders = [('User-agent', 'Mozilla/5.0 SadFarmer/%s By WangMaoMao' % (__VERSION__,) ),
-                                  ('Referer', 'http://xn.cache.fminutes.com/images/v3/module/Main.swf?v=4'),
-                                  ('x-flash-version', '11,0,32,18')] # flash 11 better?
+        self.opener.addheaders = [
+            ('User-agent', 'Mozilla/5.0 SadFarmer/%s By WangMaoMao' % (__VERSION__,) ),
+            # ('Referer', 'http://xn.cache.fminutes.com/images/v3/module/Main.swf?v=4'),
+            ('x-flash-version', '11,0,32,18') ] # flash 11 better?
         if email and password:
             self.login(email, password)
         else:
@@ -77,7 +87,9 @@ class HappyFarm(object):
     def initFarm(self):
         self._initMyInfo()
         self.updateMyPackage()
+        logging.info("载入缓存文件 %s.", self.config['cache-file'])
         if not self._loadCache():  # 缓存载入失败
+            logging.warning("载入失败!")
             self._initShopInfo()
             self._initUserInfo()
         if self.config['init-all-farms']:
@@ -121,7 +133,6 @@ class HappyFarm(object):
         if not self.config['cache-file']:
             return {}
         try:
-            logging.info("载入缓存文件 %s.", self.config['cache-file'])
             db = file(self.config['cache-file'], 'rb')
             data = Pickle.load(db)
             db.close()
@@ -147,7 +158,7 @@ class HappyFarm(object):
         try:
             logging.info("尝试从缓存载入信息....")
             data = self._readCache()
-            assert len(data.shopInfo)> 0
+            assert len(data['shopInfoDict'].keys())> 0
             self._shopInfoDict = data['shopInfoDict']
             assert data[self.email]['userList']>= 1
             self.userList = data[self.email]['userList']
@@ -161,7 +172,9 @@ class HappyFarm(object):
                         
     def saveToCache(self, user=True, env=True):
         if user:
-            self._writeCache(dict(userList=self.userList, userDict=self.userDict, userDogDict=self.userDogDict))
+            self._writeCache(dict(userList=self.userList,
+                                  userDict=self.userDict,
+                                  userDogDict=self.userDogDict))
         if env:
             self._writeCache(dict(shopInfoDict=self._shopInfoDict), isUserData=False)
     def _initShopInfo(self):
@@ -394,8 +407,13 @@ class HappyFarm(object):
             message.append("金钱 %s" % str(res['money']))
             self._profit['money'] += int(res['money'])
         if 'exp' in res:
+            if int(res['exp']) == 0 and self.config['auto-nohelp']:
+                if self.config['help-friends']:
+                    logging.warning("获得经验为 0, 已达到本日经验限额. 不再帮助好友.")
+                    self.config['help-friends'] = False
             message.append("经验 %d" % int(res['exp']) )
             self._profit['exp'] += int(res['exp'])
+            
         if 'charm' in res:
             message.append("魅力 %d" % int(res['charm']) )
             self._profit['charm'] += int(res['charm'])
@@ -451,18 +469,20 @@ class HappyFarm(object):
             landDetail = ["土地%-2d" % i]
             if land['b']!= 0:
                 landDetail.append(self.id2cName(land['a']))
-            landDetail.append([" 空地 ", "生长中", "小叶子", "大叶子", " 开花 ", " 结果 ", " 成熟 ", " 枯萎 "][land['b']])
+            landDetail.append([" 空地 ", "生长中", "小叶子", "大叶子",
+                               " 开花 ", " 结果 ", " 成熟 ", " 枯萎 "][land['b']])
             if land['r']== land['q']:
                 landDetail[-1] = " 发芽 "
             else:
                 if 0< land['b']< 6:
                     if land['r'] < self.now():
                         cId = land['a']
-                        t = land['r'] + int(self._shopInfoDict.get(cId, {}).get('growthCycle', -1000000))
+                        t = land['r'] + \
+                            int(self._shopInfoDict.get(cId, {}).get('growthCycle', -1000000))
                         if t>= self.now():
                             #t+= self._shopInfoDict[cId]
                             landDetail.append("作物成熟时间: %s" % \
-                                              time.strftime("%m-%d %H:%M:%S", time.localtime(t)))
+                                            time.strftime("%m-%d %H:%M:%S", time.localtime(t)))
                     if land['h']== 0:
                         landDetail.append("干旱")
                     if land['f']:
@@ -560,15 +580,15 @@ class HappyFarm(object):
 
 
 __doc__ = ('='*80 + \
-"""                伤心农民 %s for renren.com
+"""                伤心农民 %s(%s) for renren.com
                     By 王猫猫(andelf@gmail.com)
-                    Thu Aug 27 15:29:14 2009
+                    Sat Aug 29 17:59:50 2009
                  #使用本程序所引起的任何后果, 本人不负责#
                       请不要频繁执行, 防止被封号!
                   使用方法:
                        1> 直接运行
                        2> 察看帮助 --help
-""" + '='*80) % (__VERSION__, )
+""" + '='*80) % (__VERSION__, __DEV_STATUS__, )
 
 
 
@@ -578,33 +598,37 @@ if __name__ == '__main__':
     usage = "usage: %prog [options]"
 
     parser = OptionParser(usage=usage, version="%prog " + __VERSION__)
-    parser.add_option("-f", "--log", "--log-file", default="./sadfarmer.log",
+    parser.add_option("-f", "--log", "--log-file", default="./farmer.log",
                       action="store", type="string", dest="logfile", metavar="FILENAME",
-                      help=u"记录日志文件名")
+                      help=u"记录日志文件名. 默认为 farmer.log.")
     parser.add_option("-c", "--cache", "--cache-file", default="./farmer.cache",
                       action="store", type="string", dest="cacheFile", metavar="FILENAME",
-                      help=u"缓存文件名")
+                      help=u"缓存文件名. 默认为 farmer.chche")
     parser.add_option("-u", "--user", "--username", "--email",
                       action="store", type="string", dest="email", metavar="EMAIL",
-                      help=u"用户 email, 或者手机号")
+                      help=u"用户 email, 或者手机号.")
     parser.add_option("-p", "--pass", "--password",
                       action="store", type="string", dest="password", metavar="PASSWORD",
-                      help=u"用户密码")
+                      help=u"用户密码.")
+    parser.add_option("-t", "--timeout", "--time-out", default=10.0,
+                      action="store", type="float", dest="timeout", metavar="TIME(s)",
+                      help=u"网络连接超时, 默认为 10 秒.")
     parser.add_option("-e", "--enable",
                       action="append", dest="farmOption", metavar="TERM",
                       choices=setableTerms, default=[],
-                      help=u"打开设置 TERM")
+                      help=u"打开设置 TERM. 参见设置列表.")
     parser.add_option("-d", "--disable", "--no",
                       action="append", dest="farmOptionDisable", metavar="TERM",
                       choices=setableTerms, default=[],
-                      help=u"关闭设置 TERM 高优先级")
+                      help=u"关闭设置 TERM. 优先级高于 -e.")
     (options, args) = parser.parse_args()
-
+    
     for op in options.farmOption:
         defaultConfig[op] = True
     for op in options.farmOptionDisable:
         defaultConfig[op] = False
     defaultConfig['cache-file'] = options.cacheFile
+    socket.setdefaulttimeout(options.timeout)
     # set logging
     print "日志写入到 %s." % options.logfile 
     logging.basicConfig(level=logging.INFO,
@@ -622,5 +646,5 @@ if __name__ == '__main__':
     h = HappyFarm(options.email, options.password)
     
     h.runSimple()
-    system('pause')
+#     system('pause')
 
