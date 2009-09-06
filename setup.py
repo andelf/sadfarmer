@@ -8,7 +8,7 @@ from SadFarmer import __VERSION__, __DEV_STATUS__
 
 setup(
     version = __VERSION__,
-    description = u"伤心农民 %s(%s). By WangMaoMao" % (__VERSION__, __DEV_STATUS__)
+    description = u"伤心农民 %s(%s). By WangMaoMao" % (__VERSION__, __DEV_STATUS__),
     name = r"SadFarmer",
     options = {"py2exe": {"compressed": 1,
                           "optimize": 2,

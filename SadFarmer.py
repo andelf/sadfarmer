@@ -4,7 +4,7 @@
 #  Author      : WangMaoMao
 #  Created     : Tue Aug 25 19:15:47 2009 by Feather.et.ELF 
 #  Description : 校内(人人)开心农场辅助工具 伤心农民 0.1.8
-#  Time-stamp: <2009-08-30 00:51:06 andelf> 
+#  Time-stamp: <2009-09-03 07:21:50 andelf> 
 
 # fix py2.6 logging codec error
 import os
@@ -20,7 +20,7 @@ import urllib
 import urllib2
 import time
 import simplejson
-import md5
+from hashlib import md5
 import logging
 import re
 from os import system
@@ -33,7 +33,7 @@ except:
     import Pickle
 
 __VERSION__ = '0.1.8'
-__DEV_STATUS__ = ['development', 'beta', 'release'][0] # always modify this
+__DEV_STATUS__ = ['development', 'beta', 'release'][1] # always modify this
 
 defaultConfig = {"help-friends" : True,
                  "steal" : True,
@@ -45,10 +45,12 @@ defaultConfig = {"help-friends" : True,
                  "init-all-farms" : False,
                  "log-land-info" : True,
                  "auto-nohelp" : True,
+                 "steal-flower": True,
                  }
 
 setableTerms = ['help-friends', 'sell-all', 'full-simulate', 'steal', 'hide-username',
-                'afraid-of-dog', 'init-all-farms', 'log-land-info', 'auto-nohelp']
+                'afraid-of-dog', 'init-all-farms', 'log-land-info', 'auto-nohelp', 
+                'steal-flower']
 
 class HappyFarm(object):
     def __init__(self, email=None, password=None, config=defaultConfig):
@@ -281,6 +283,7 @@ class HappyFarm(object):
                                     {'ownerId' : ownerId,
                                      'cId' : cItem['cId'],
                                      'place' : i } )
+                cItem['amount']-= 1 # fuck a previous bug here
                 self.log(res)
                 break
         self.updateMyPackage()
@@ -345,7 +348,11 @@ class HappyFarm(object):
             logging.info("用户 %s(id:%d) 土地%d %s 的狗狗正在活动中. 放弃偷窃.", self.id2userName(ownerId),
                              ownerId, i, self.id2cName(land['a']))
         for i, land in enumerate( self._farmlandsStatus[ownerId] ):
-            if land['b'] == 6 and land['m'] > land['l'] and land['n']>=2:
+            if land['b'] == 6 and land['m'] > land['l'] \
+                    and land['n']>=2:
+                if not self.config['steal-flower'] and land['a']> 100:
+                    logging.info("设置开启, 不偷花.")
+                    continue
                 self._stateChanged = True
                 logging.info("用户 %s(id:%d) 土地%d %s 可偷窃.", self.id2userName(ownerId),
                              ownerId, i, self.id2cName(land['a']))
@@ -503,7 +510,7 @@ class HappyFarm(object):
                 'password' :  password,
                 'origURL' : "http://apps.renren.com/happyfarm" }
         res = self.request(url, data, jsonFormat=False)
-        url = re.findall(r'<iframe name="iframe_canvas" src="([^"]+)"', res)
+        url = re.findall(r'id="iframe_canvas" src="([^"]+)"', res) # BUG fixed
         if not url:
             logging.error("用户名/密码错误!")
             system('pause')
@@ -542,6 +549,10 @@ class HappyFarm(object):
             req = urllib2.Request(url)
         try:
             res = self.opener.open(req).read()
+            if jsonFormat:
+                return self.jsonDecode(  res )
+            else:
+                return res
         except urllib2.URLError, err:
             logging.warning("获取 URL 发生错误: %s.", err)
             logging.warning("重试......")
@@ -553,10 +564,10 @@ class HappyFarm(object):
             logging.warning("socket 发生错误: %s.", err)
             logging.warning("重试......")
             return self.request(url, data, jsonFormat)
-        if jsonFormat:
-            return self.jsonDecode(  res )
-        else:
-            return res
+        except ValueError, err:
+            logging.warning("JSON 格式发生错误: %s.", err)
+            return self.request(url, data, jsonFormat)
+        
     
     def buildUrl(self, mod, act=None, flag=None, type=[], farmTime=None):
         result_url = ["http://xn.hf.fminutes.com/api.php?mod=" + mod]
@@ -568,7 +579,7 @@ class HappyFarm(object):
             result_url.append("type=" + ','.join(map(str, type)))
         if not farmTime:                    # serverTime
             farmTime = str(self.now())
-        farmKey = md5.new(farmTime + "15L3H4KH".lower()).hexdigest() # Magic~
+        farmKey = md5(farmTime + "15L3H4KH".lower()).hexdigest() # Magic~
         # wahaha~magic erlang:integer_to_list(16#ff2e301a, 23).
         result_url.append("farmKey=" + farmKey)
         result_url.append("farmTime=" + farmTime)
