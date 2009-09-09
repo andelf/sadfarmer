@@ -1,18 +1,23 @@
 #!/usr/bin/env python
-# -*- coding:gb18030 -*-
+# -*- coding:utf-8 -*-
 #  FileName    : SadFarmer.py 
 #  Author      : WangMaoMao
 #  Created     : Tue Aug 25 19:15:47 2009 by Feather.et.ELF 
-#  Description : Ğ£ÄÚ(ÈËÈË)¿ªĞÄÅ©³¡¸¨Öú¹¤¾ß ÉËĞÄÅ©Ãñ 0.1.8
-#  Time-stamp: <2009-09-03 07:21:50 andelf> 
+#  Description : æ ¡å†…(äººäºº)å¼€å¿ƒå†œåœºè¾…åŠ©å·¥å…· ä¼¤å¿ƒå†œæ°‘ 0.1.8
+#  Time-stamp: <2009-09-09 11:07:37 andelf> 
 
 # fix py2.6 logging codec error
 import os
+import sys
+import site
+reload(sys)
 if os.name== 'nt':
-    import sys
-    import site
-    reload(sys)
     sys.setdefaultencoding('gb18030')
+    CODEC = 'gb18030'
+else:
+    sys.setdefaultencoding('utf-8')
+    CODEC = 'utf-8'
+
 
 import socket
 socket.setdefaulttimeout(10.0)
@@ -59,12 +64,12 @@ class HappyFarm(object):
         self.inited = False
         self._timeDelta = 0
         self._timeStamp = 0
-        self._stateChanged = False        # ±êÖ¾±äÁ¿
+        self._stateChanged = False        # æ ‡å¿—å˜é‡
         self.userList = []
         self.userDict = {}
         self.userDogDict = {}
         self._farmlandsStatus = {}
-        self._profit = {'direction': u"ºÏ¼Æ:", 'harvest':0, 'money':0, 'exp':0, 'charm':0,
+        self._profit = {'direction': u"åˆè®¡:", 'harvest':0, 'money':0, 'exp':0, 'charm':0,
                         'crops' : defaultdict(int) }
         self.jsonDecode = simplejson.JSONDecoder(encoding='gb18030').decode
         cookie_handler = urllib2.HTTPCookieProcessor()
@@ -79,19 +84,19 @@ class HappyFarm(object):
             try:
                 cookie = self.getCookieViaCOM()
             except :
-                logging.error("ÎŞ·¨Í¨¹ı COM Á¬½Ó»ñµÃÓÃ»§ĞÅÏ¢!")
+                logging.error(u"æ— æ³•é€šè¿‡ COM è¿æ¥è·å¾—ç”¨æˆ·ä¿¡æ¯!")
                 system('pause')
                 exit(-1)
             self.opener.addheaders += [ ('Cookie', cookie) ]
         if self.config['hide-username']:
-            self.id2userName = lambda _: "‡å‡å‡å"
+            self.id2userName = lambda _: u"å›§å›§å›§"
         self.initFarm()
     def initFarm(self):
         self._initMyInfo()
         self.updateMyPackage()
-        logging.info("ÔØÈë»º´æÎÄ¼ş %s.", self.config['cache-file'])
-        if not self._loadCache():  # »º´æÔØÈëÊ§°Ü
-            logging.warning("ÔØÈëÊ§°Ü!")
+        logging.info(u"è½½å…¥ç¼“å­˜æ–‡ä»¶ %s.", self.config['cache-file'])
+        if not self._loadCache():  # ç¼“å­˜è½½å…¥å¤±è´¥
+            logging.warning(u"è½½å…¥å¤±è´¥!")
             self._initShopInfo()
             self._initUserInfo()
         if self.config['init-all-farms']:
@@ -100,16 +105,16 @@ class HappyFarm(object):
             self.inited = True
     def _initMyInfo(self):
         res = self.request( self.buildUrl('user', 'run') )
-        logging.info("³õÊ¼»¯×Ô¼ºÅ©³¡ĞÅÏ¢.")
-        logging.info("ÓÃ»§ %s ¸öÈËĞÅÏ¢»ñÈ¡³É¹¦. ·şÎñÆ÷Ê±¼ä: %d ÍÁµØÊı: %d.",
-                     res.get('user', {}).get('userName', 0).encode('gb18030'),
+        logging.info(u"åˆå§‹åŒ–è‡ªå·±å†œåœºä¿¡æ¯.")
+        logging.info(u"ç”¨æˆ· %s ä¸ªäººä¿¡æ¯è·å–æˆåŠŸ. æœåŠ¡å™¨æ—¶é—´: %d åœŸåœ°æ•°: %d.",
+                     res.get('user', {}).get('userName', 0).encode(CODEC),
                      res.get('serverTime', {}).get('time', 0),
                      len(res.get('farmlandStatus', [])) )
         self._uid = res['user']['uId']
         self._farmlandStatus = res['farmlandStatus'] # or needless
         self._farmlandsStatus[self._uid] = self._farmlandStatus
         self._timeDelta = int(time.time() - res['serverTime']['time'])
-        logging.info("Ê±¼äÍ¬²½³É¹¦. Ê±²îÎª %d.", self._timeDelta)
+        logging.info(u"æ—¶é—´åŒæ­¥æˆåŠŸ. æ—¶å·®ä¸º %d.", self._timeDelta)
     def updateFarm(self, ownerId=0):
         uid = self._uid if ownerId== 0 else ownerId
         res = self.request( self.buildUrl('user', 'run', 1),
@@ -118,17 +123,17 @@ class HappyFarm(object):
         self._farmlandsStatus[uid] = res['farmlandStatus']
         if uid== self._uid:
             self._farmlandStatus = res['farmlandStatus']
-            logging.info("¸üĞÂ×Ô¼ºÅ©³¡ĞÅÏ¢. ÍÁµØÊı: %d.", len(res['farmlandStatus']) )
+            logging.info(u"æ›´æ–°è‡ªå·±å†œåœºä¿¡æ¯. åœŸåœ°æ•°: %d.", len(res['farmlandStatus']) )
         else:
-            logging.info("¸üĞÂÓÃ»§ %s(id:%s) Å©³¡ĞÅÏ¢. ÍÁµØÊı: %d.",
+            logging.info(u"æ›´æ–°ç”¨æˆ· %s(id:%s) å†œåœºä¿¡æ¯. åœŸåœ°æ•°: %d.",
                          self.id2userName(ownerId),
                          str(ownerId), len(res['farmlandStatus']) )
             
     def updateMyPackage(self):
         res = self.request( self.buildUrl('Package', 'getPackageInfo') )
-        logging.info("¸üĞÂ±³°üĞÅÏ¢ ÀàĞÍ1(ÖÖ×Ó).")
+        logging.info(u"æ›´æ–°èƒŒåŒ…ä¿¡æ¯ ç±»å‹1(ç§å­).")
         for i in res.get('1', []):  # May fail, so use get() 
-            logging.info("%s %d ¸ö", i['cName'].encode('gb18030'), int(i['amount']) )
+            logging.info(u"%s %d ä¸ª", i['cName'].encode('CODEC'), int(i['amount']) )
         self._packageInfo = res.get('1', [])
         
     def _readCache(self, key=None):
@@ -145,7 +150,7 @@ class HappyFarm(object):
         if not self.config['cache-file']:
             return
         try:
-            logging.info("Ğ´Èë»º´æÎÄ¼ş %s .", self.config['cache-file'])
+            logging.info(u"å†™å…¥ç¼“å­˜æ–‡ä»¶ %s .", self.config['cache-file'])
             gData = self._readCache()
             if isUserData:
                 gData[self.email] = dict(data, timeStamp=self._timeStamp)
@@ -155,10 +160,10 @@ class HappyFarm(object):
             Pickle.dump(gData, db)
             db.close()
         except:
-            logging.warning("»º´æÎÄ¼şĞ´ÈëÊ§°Ü.")
+            logging.warning(u"ç¼“å­˜æ–‡ä»¶å†™å…¥å¤±è´¥.")
     def _loadCache(self, user=True, env=True):
         try:
-            logging.info("³¢ÊÔ´Ó»º´æÔØÈëĞÅÏ¢....")
+            logging.info(u"å°è¯•ä»ç¼“å­˜è½½å…¥ä¿¡æ¯....")
             data = self._readCache()
             assert len(data['shopInfoDict'].keys())> 0
             self._shopInfoDict = data['shopInfoDict']
@@ -166,10 +171,10 @@ class HappyFarm(object):
             self.userList = data[self.email]['userList']
             self.userDict = data[self.email]['userDict']
             self.userDogDict = data[self.email]['userDogDict']
-            logging.info("ÔØÈë %d ÌõÓÃ»§ĞÅÏ¢.", len(self.userList))
+            logging.info(u"è½½å…¥ %d æ¡ç”¨æˆ·ä¿¡æ¯.", len(self.userList))
             return True
         except:
-            logging.warning("ÔØÈëÊ§°Ü!")
+            logging.warning(u"è½½å…¥å¤±è´¥!")
             return False
                         
     def saveToCache(self, user=True, env=True):
@@ -183,8 +188,8 @@ class HappyFarm(object):
         res = self.request( self.buildUrl('shop', 'getShopInfo', type=[1]) )
         self._shopInfoDict = dict([(i['cId'], i) for i in res.get('1', [])])
         self.saveToCache(user=False, env=True)
-        logging.info("³õÊ¼»¯ÉÌµêÎïÆ· ÀàĞÍ1(ÖÖ×Ó).")
-        logging.info("µÃµ½ %d ¸öÖÖ×ÓĞÅÏ¢.", len(self._shopInfoDict.keys()))
+        logging.info(u"åˆå§‹åŒ–å•†åº—ç‰©å“ ç±»å‹1(ç§å­).")
+        logging.info(u"å¾—åˆ° %d ä¸ªç§å­ä¿¡æ¯.", len(self._shopInfoDict.keys()))
         
     def _initUserInfo(self):
         res = self.request( self.buildUrl('friend'),
@@ -194,7 +199,7 @@ class HappyFarm(object):
         # res = res['data'] # fuck ? server modified?
         self.userList = [int(f['userId']) for f in res if int(f['exp'])> 200] # note: last is mine
         self.userDict = dict([(int(f['userId']), f) for f in res if int(f['exp'])!= 0])
-        logging.info("»ñµÃ %d ÓÃ»§.", len(self.userList))
+        logging.info(u"è·å¾— %d ç”¨æˆ·.", len(self.userList))
         self.saveToCache(user=True, env=False)
     def updateAllFarms(self):
         self._farmlandsStatus = {}  # rebuild
@@ -202,7 +207,7 @@ class HappyFarm(object):
             self._initUserInfo()
         for uid in self.userList:
             self.updateFarm(uid)
-        logging.info("»ñµÃ %d ¸öÓÃ»§Å©³¡ĞÅÏ¢.", len(self.userList))
+        logging.info(u"è·å¾— %d ä¸ªç”¨æˆ·å†œåœºä¿¡æ¯.", len(self.userList))
         self._farmlandStatus = self._farmlandsStatus[self._uid]
         self.saveToCache(user=True, env=False)  # save dog info~ maybe
         self.inited = True
@@ -211,7 +216,7 @@ class HappyFarm(object):
         if not self.config['sell-all']:
             return
         if all:
-            logging.info("³öÊÛ²Ö¿âËùÓĞ¹ûÊµ. (»¨±£Áô)")
+            logging.info(u"å‡ºå”®ä»“åº“æ‰€æœ‰æœå®. (èŠ±ä¿ç•™)")
             res = self.request( self.buildUrl('repertory', 'saleAll'), {'type':1})
         else:
             res = self.request( self.buildUrl('repertory', 'sale'),
@@ -223,9 +228,9 @@ class HappyFarm(object):
         ownerId = self._uid
         # harvest my only
         for i, land in enumerate(self._farmlandStatus):
-            if land['b'] == 6: # ³ÉÊì
+            if land['b'] == 6: # æˆç†Ÿ
                 self._stateChanged = True
-                logging.info("ÍÁµØ%d %s ³ÉÊì. ÊÕ»ñ!", i, self.id2cName(land['a']))
+                logging.info(u"åœŸåœ°%d %s æˆç†Ÿ. æ”¶è·!", i, self.id2cName(land['a']))
                 res = self.request( self.buildUrl('farmlandstatus', 'harvest'),
                                     {'ownerId': ownerId,
                                      'place'  : i } )
@@ -235,22 +240,22 @@ class HappyFarm(object):
         self._stateChanged = False
     def buy(self, howMany=1, id=None, type=1):
         if not id: # TODO: auto buy highest
-            logging.warning("ÓÉÓÚÍõÃ¨Ã¨Ï²»¶Ãµ¹å, ËùÒÔÄãÒ²±ØĞëÖÖÃµ¹å!")
+            logging.warning(u"ç”±äºç‹çŒ«çŒ«å–œæ¬¢ç«ç‘°, æ‰€ä»¥ä½ ä¹Ÿå¿…é¡»ç§ç«ç‘°!")
             id = 101
             type = 1
-        logging.info("¹ºÂò %s(ÀàĞÍ%d) %d ¸ö",
+        logging.info(u"è´­ä¹° %s(ç±»å‹%d) %d ä¸ª",
                      self.id2cName(id), type, howMany)
         res = self.request( self.buildUrl('shop', 'buy'),
                             {'id' : id,
                              'type' : type,
                              'number' : howMany } )
         self.log(res)
-    def scarify(self, autoRefresh=True):  # ²ù³ı
+    def scarify(self, autoRefresh=True):  # é“²é™¤
         ownerId = self._uid # scarify my only
         for i, land in enumerate(self._farmlandStatus):
-            if land['b'] == 7: # ¿İ¸ù×´Ì¬
+            if land['b'] == 7: # æ¯æ ¹çŠ¶æ€
                 self._stateChanged = True
-                logging.info("ÍÁµØ%d %s ¿İÎ®. ²ù³ı!", i, self.id2cName(land['a']))
+                logging.info(u"åœŸåœ°%d %s æ¯è. é“²é™¤!", i, self.id2cName(land['a']))
                 res = self.request( self.buildUrl('farmlandstatus', 'scarify'),
                                     {'ownerId': ownerId,
                                      'place'  : i } )
@@ -264,13 +269,13 @@ class HappyFarm(object):
         emptyLands = [i for i,land in enumerate(self._farmlandStatus) if land['b']==0]
         seedNeeded = len(emptyLands)
         if seedNeeded<= 0:
-            logging.info("²»ĞèÒªÖÖÖ²ĞÂ×÷Îï.")
+            logging.info(u"ä¸éœ€è¦ç§æ¤æ–°ä½œç‰©.")
             return 
-        logging.info("·¢ÏÖ¿ÕµØ %d ¿é.", seedNeeded)
+        logging.info(u"å‘ç°ç©ºåœ° %d å—.", seedNeeded)
         cItems = sorted(self._packageInfo, key = lambda d:d['cId'])[::-1]
         seedHaveGot = sum(seed['amount'] for seed in cItems)
         if seedNeeded> seedHaveGot:
-            logging.warning("ÖÖ×Ó²»×ã, ×Ô¶¯¹ºÂò.")
+            logging.warning(u"ç§å­ä¸è¶³, è‡ªåŠ¨è´­ä¹°.")
             self.buy(seedNeeded - seedHaveGot)
             self.updateMyPackage()
             return self.planting(ownerId)
@@ -278,7 +283,7 @@ class HappyFarm(object):
             for cItem in cItems:
                 if cItem['amount']<= 0:
                     continue
-                logging.info("ÍÁµØ%d ÖÖÖ² %s.", i, self.id2cName(cItem['cId']))
+                logging.info(u"åœŸåœ°%d ç§æ¤ %s.", i, self.id2cName(cItem['cId']))
                 res = self.request( self.buildUrl('farmlandstatus', 'planting'),
                                     {'ownerId' : ownerId,
                                      'cId' : cItem['cId'],
@@ -307,30 +312,30 @@ class HappyFarm(object):
     def doMisc(self, ownerId=None, autoRefresh=True):
         ownerId = ownerId if ownerId else self._uid
         for i, land in enumerate( self._farmlandsStatus[ownerId] ):
-            if land['b']>= 6: # ³ÉÊì»òÕß¿İÎ®
+            if land['b']>= 6: # æˆç†Ÿæˆ–è€…æ¯è
                 continue
-            if land['h'] == 0: # ¸Éºµ
+            if land['h'] == 0: # å¹²æ—±
                 self._stateChanged = True
-                logging.info("ÓÃ»§ %s(id:%d) ÍÁµØ%d %s ¸Éºµ. °ïÖú½½Ë®!", self.id2userName(ownerId),
+                logging.info(u"ç”¨æˆ· %s(id:%d) åœŸåœ°%d %s å¹²æ—±. å¸®åŠ©æµ‡æ°´!", self.id2userName(ownerId),
                              ownerId, i, self.id2cName(land['a']))
                 res = self.request( self.buildUrl('farmlandstatus', 'water'),
                                     {'ownerId': ownerId,
                                      'place'  : i } )
                 self.log(res)
-            if land['t'] != 0: # Çà³æÑªÁ¿
+            if land['t'] != 0: # é’è™«è¡€é‡
                 land['g']+= 1
-            for _ in xrange( land['g'] ): # ³æ×ÓÊı
+            for _ in xrange( land['g'] ): # è™«å­æ•°
                 self._stateChanged = True
-                logging.info("ÓÃ»§ %s(id:%d) ÍÁµØ%d %s Éú³æ. °ïÖúÉ±³æ!", self.id2userName(ownerId),
+                logging.info(u"ç”¨æˆ· %s(id:%d) åœŸåœ°%d %s ç”Ÿè™«. å¸®åŠ©æ€è™«!", self.id2userName(ownerId),
                              ownerId, i, self.id2cName(land['a']))
                 res = self.request( self.buildUrl('farmlandstatus', 'spraying'),
                                     {'tId' : 0,
                                      'ownerId': ownerId,
                                      'place'  : i } )
                 self.log(res)
-            for _ in xrange( land['f'] ): # ²İÊı
+            for _ in xrange( land['f'] ): # è‰æ•°
                 self._stateChanged = True
-                logging.info("ÓÃ»§ %s(id:%d) ÍÁµØ%d %s ³¤²İ. °ïÖú³ı²İ!", self.id2userName(ownerId),
+                logging.info(u"ç”¨æˆ· %s(id:%d) åœŸåœ°%d %s é•¿è‰. å¸®åŠ©é™¤è‰!", self.id2userName(ownerId),
                              ownerId, i, self.id2cName(land['a']))
                 res = self.request( self.buildUrl('farmlandstatus', 'clearWeed'),
                                     {'tId' : 0,
@@ -341,20 +346,20 @@ class HappyFarm(object):
             self.updateFarm(ownerId)
         self._stateChanged = False
             
-    def scrounge(self, ownerId, autoRefresh=True): # Íµ²Ë
+    def scrounge(self, ownerId, autoRefresh=True): # å·èœ
         if ownerId == self._uid or ownerId == 235795214:
-            return # ²»Íµ×Ô¼ºµÄ
+            return # ä¸å·è‡ªå·±çš„
         if self.config['afraid-of-dog'] and self.userDogDict[ownerId]['dogFeedTime'] > self.now():
-            logging.info("ÓÃ»§ %s(id:%d) ÍÁµØ%d %s µÄ¹·¹·ÕıÔÚ»î¶¯ÖĞ. ·ÅÆúÍµÇÔ.", self.id2userName(ownerId),
+            logging.info(u"ç”¨æˆ· %s(id:%d) åœŸåœ°%d %s çš„ç‹—ç‹—æ­£åœ¨æ´»åŠ¨ä¸­. æ”¾å¼ƒå·çªƒ.", self.id2userName(ownerId),
                              ownerId, i, self.id2cName(land['a']))
         for i, land in enumerate( self._farmlandsStatus[ownerId] ):
             if land['b'] == 6 and land['m'] > land['l'] \
                     and land['n']>=2:
                 if not self.config['steal-flower'] and land['a']> 100:
-                    logging.info("ÉèÖÃ¿ªÆô, ²»Íµ»¨.")
+                    logging.info(u"è®¾ç½®å¼€å¯, ä¸å·èŠ±.")
                     continue
                 self._stateChanged = True
-                logging.info("ÓÃ»§ %s(id:%d) ÍÁµØ%d %s ¿ÉÍµÇÔ.", self.id2userName(ownerId),
+                logging.info(u"ç”¨æˆ· %s(id:%d) åœŸåœ°%d %s å¯å·çªƒ.", self.id2userName(ownerId),
                              ownerId, i, self.id2cName(land['a']))
                 res = self.request( self.buildUrl('farmlandstatus', 'scrounge'),
                                     {'ownerId': ownerId,
@@ -365,7 +370,7 @@ class HappyFarm(object):
         self._stateChanged = False
 
     def runSimple(self):
-        logging.info("Ö´ĞĞ runSimple ²ßÂÔ.")
+        logging.info(u"æ‰§è¡Œ runSimple ç­–ç•¥.")
         if not self.inited:
             self.updateFarm()  # update My
         if self.config['log-land-info']:
@@ -383,14 +388,14 @@ class HappyFarm(object):
             if self.config['log-land-info']:
                 logging.info(self.id2userDetail(i))
             if self.config['help-friends']:
-                self.doMisc(i, autoRefresh=False) # ÏÈ×öºÃÊÂºóÍµÈË 
+                self.doMisc(i, autoRefresh=False) # å…ˆåšå¥½äº‹åå·äºº 
             if self.config['steal']:
                 self.scrounge(i)
         self._timeStamp = self.now()
         self.logProfit()
         if self.config['sell-all']:
             self.sell()
-        logging.info("Ö´ĞĞ runSimple ²ßÂÔ½áÊø.")
+        logging.info(u"æ‰§è¡Œ runSimple ç­–ç•¥ç»“æŸ.")
     def refresh(self):
         self.updateAllFarms()
         self.updateMyPackage()
@@ -399,53 +404,53 @@ class HappyFarm(object):
     def log(self, res, additionalInfo = '.'):
         message = []
         if 'direction' in res:
-            message.append(res['direction'].encode('gb18030'))
+            message.append(res['direction'])
         if 'harvest' in res:
-            message.append("ÊÕ»ñ %d" % int(res['harvest']) )
+            message.append(u"æ”¶è· %d" % int(res['harvest']) )
             self._profit['harvest'] += int(res['harvest'])
             if 'status' in res:
                 self._profit['crops'][int(res['status']['cId'])] += int(res['harvest'])
-                message.append("×÷Îï %s" % self.id2cName(res['status']['cId']))
+                message.append(u"ä½œç‰© %s" % self.id2cName(res['status']['cId']))
         if 'cName' in res:
-            message.append(res['cName'].encode('gb18030'))
+            message.append(res['cName'])
         if 'num' in res:
-            message.append("%d ¸ö" % int(res['num']))
+            message.append(u"%d ä¸ª" % int(res['num']))
         if 'money' in res:
-            message.append("½ğÇ® %s" % str(res['money']))
+            message.append(u"é‡‘é’± %s" % str(res['money']))
             self._profit['money'] += int(res['money'])
         if 'exp' in res:
             if int(res['exp']) == 0 and self.config['auto-nohelp']:
                 if self.config['help-friends']:
-                    logging.warning("»ñµÃ¾­ÑéÎª 0, ÒÑ´ïµ½±¾ÈÕ¾­ÑéÏŞ¶î. ²»ÔÙ°ïÖúºÃÓÑ.")
+                    logging.warning(u"è·å¾—ç»éªŒä¸º 0, å·²è¾¾åˆ°æœ¬æ—¥ç»éªŒé™é¢. ä¸å†å¸®åŠ©å¥½å‹.")
                     self.config['help-friends'] = False
-            message.append("¾­Ñé %d" % int(res['exp']) )
+            message.append(u"ç»éªŒ %d" % int(res['exp']) )
             self._profit['exp'] += int(res['exp'])
             
         if 'charm' in res:
-            message.append("÷ÈÁ¦ %d" % int(res['charm']) )
+            message.append(u"é­…åŠ› %d" % int(res['charm']) )
             self._profit['charm'] += int(res['charm'])
         message.append(additionalInfo)
         logging.info( (' '.join(message)).strip())
     def logProfit(self):
-        message = ["½áÊøÔËĞĞ, Êä³ö´Ë´ÎÊÕ»ñ...\n==================== ÊÕ»ñÇåµ¥ ======================\n",]
+        message = [u"ç»“æŸè¿è¡Œ, è¾“å‡ºæ­¤æ¬¡æ”¶è·...\n==================== æ”¶è·æ¸…å• ======================\n",]
         j = 0
         moneySum = 0
         for i,v in self._profit['crops'].items():
             if v == 0:
                 continue
-            message.append('%-14s %-4d %-5d' % (self.id2cName(i), v, self.id2money(i, v)))
+            message.append(u'%-14s %-4d %-5d' % (self.id2cName(i), v, self.id2money(i, v)))
             moneySum+= self.id2money(i,v)
             j+= 1
             message.append('\n' if j%2== 0 else ' | ')
-        message.append("\nËùÓĞ×÷ÎïÕÛºÏ½ğÇ® %d." % moneySum)
+        message.append(u"\næ‰€æœ‰ä½œç‰©æŠ˜åˆé‡‘é’± %d." % moneySum)
         logging.info(''.join(message))
         self.log(self._profit)
-        self._profit = {'direction': u"ºÏ¼Æ:", 'harvest':0, 'money':0, 'exp':0, 'charm':0,
+        self._profit = {'direction': u"åˆè®¡:", 'harvest':0, 'money':0, 'exp':0, 'charm':0,
                         'crops' : defaultdict(int) } # re_init
     def id2cName(self, cId): # corn name
         cId = int(cId)
         try:
-            return (self._shopInfoDict[cId]['cName'].split()[0]).encode('gb18030')
+            return (self._shopInfoDict[cId]['cName'].split()[0])
         except:
             return "cID#%d" % cId
     def id2money(self, cId, num=1):
@@ -455,7 +460,7 @@ class HappyFarm(object):
         except:
             return 0
     def id2userName(self, uid):
-        return self.userDict.get(int(uid), {}).get('userName', u'‡å‡å‡å').encode('gb18030')
+        return self.userDict.get(int(uid), {}).get('userName', u'å›§å›§å›§')
 
     def id2level(self, uid=None):
         uid = int(uid) if uid else self._uid
@@ -468,18 +473,18 @@ class HappyFarm(object):
         logging.debug(uid)
         detail = [""]
         dogFeedTime = int(self.userDogDict[uid]['dogFeedTime'])
-        detail.append("ÓÃ»§Ãû: %s(id:%d) ¾­Ñé: %5d µÈ¼¶: %2d ¹·¹·»î¶¯: %s." %
+        detail.append(u"ç”¨æˆ·å: %s(id:%d) ç»éªŒ: %5d ç­‰çº§: %2d ç‹—ç‹—æ´»åŠ¨: %s." %
                       (self.id2userName(uid), uid, int(self.userDict[uid]['exp']), self.id2level(uid),
                        time.strftime("%m-%d %H:%M:%S", time.localtime(dogFeedTime)) \
-                             if dogFeedTime> self.now() else "²»»î¶¯"))
+                             if dogFeedTime> self.now() else u"ä¸æ´»åŠ¨"))
         for i,land in enumerate(self._farmlandsStatus[uid]):
-            landDetail = ["ÍÁµØ%-2d" % i]
+            landDetail = [u"åœŸåœ°%-2d" % i]
             if land['b']!= 0:
                 landDetail.append(self.id2cName(land['a']))
-            landDetail.append([" ¿ÕµØ ", "Éú³¤ÖĞ", "Ğ¡Ò¶×Ó", "´óÒ¶×Ó",
-                               " ¿ª»¨ ", " ½á¹û ", " ³ÉÊì ", " ¿İÎ® "][land['b']])
+            landDetail.append([u" ç©ºåœ° ", u"ç”Ÿé•¿ä¸­", u"å°å¶å­", u"å¤§å¶å­",
+                               u" å¼€èŠ± ", u" ç»“æœ ", u" æˆç†Ÿ ", u" æ¯è "][land['b']])
             if land['r']== land['q']:
-                landDetail[-1] = " ·¢Ñ¿ "
+                landDetail[-1] = u" å‘èŠ½ "
             else:
                 if 0< land['b']< 6:
                     if land['r'] < self.now():
@@ -488,23 +493,23 @@ class HappyFarm(object):
                             int(self._shopInfoDict.get(cId, {}).get('growthCycle', -1000000))
                         if t>= self.now():
                             #t+= self._shopInfoDict[cId]
-                            landDetail.append("×÷Îï³ÉÊìÊ±¼ä: %s" % \
+                            landDetail.append(u"ä½œç‰©æˆç†Ÿæ—¶é—´: %s" % \
                                             time.strftime("%m-%d %H:%M:%S", time.localtime(t)))
                     if land['h']== 0:
-                        landDetail.append("¸Éºµ")
+                        landDetail.append(u"å¹²æ—±")
                     if land['f']:
-                        landDetail.append("ÔÓ²İ: %d¿Ã" % land['f'])
+                        landDetail.append(u"æ‚è‰: %dæ£µ" % land['f'])
                     if land['g']:
-                        landDetail.append("Ğ¡³æ×Ó: %dÌõ" % land['g'])
+                        landDetail.append(u"å°è™«å­: %dæ¡" % land['g'])
                     if land['t']:
-                        landDetail.append("´óÇà³æÑªÁ¿: %d/5" % land['t'])
+                        landDetail.append(u"å¤§é’è™«è¡€é‡: %d/5" % land['t'])
                 if land['b']== 6:
-                    landDetail.append("Ê£Óà¹ûÊµ: %d" % land['m'])
-                    landDetail.append("¿ÉÍµÇÔ" if land['n']>= 2 and land['m']> land['l'] else "²»¿ÉÍµ")
+                    landDetail.append(u"å‰©ä½™æœå®: %d" % land['m'])
+                    landDetail.append(u"å¯å·çªƒ" if land['n']>= 2 and land['m']> land['l'] else u"ä¸å¯å·")
             detail.append(' '.join(landDetail))
         return '\n'.join(detail)
     def login(self, email, password):
-        logging.info("Ä£ÄâÒ³ÃæµÇÂ½... ÓÃ»§: %s.", email)
+        logging.info(u"æ¨¡æ‹Ÿé¡µé¢ç™»é™†... ç”¨æˆ·: %s.", email)
         url = "http://login.renren.com/Login.do"
         data = {'email' : email,
                 'password' :  password,
@@ -512,8 +517,7 @@ class HappyFarm(object):
         res = self.request(url, data, jsonFormat=False)
         url = re.findall(r'id="iframe_canvas" src="([^"]+)"', res) # BUG fixed
         if not url:
-            logging.error("ÓÃ»§Ãû/ÃÜÂë´íÎó!")
-            system('pause')
+            logging.error(u"ç”¨æˆ·å/å¯†ç é”™è¯¯!")
             exit(-1)
         url = url[0]
         url = url.replace('amp;', '').replace('?', '/?')
@@ -523,8 +527,8 @@ class HappyFarm(object):
         
     def getCookieViaCOM(self, visible = False):
         # win32 only, needs `save password` option on
-        logging.info("Ê¹ÓÃ COM »ñµÃ±£´æÓÃ»§µÇÂ½ĞÅÏ¢...")
-        logging.warning("ÇëÈ·ÈÏ IE ÖĞÉèÖÃÎª×Ô¶¯µÇÂ½!")
+        logging.info(u"ä½¿ç”¨ COM è·å¾—ä¿å­˜ç”¨æˆ·ç™»é™†ä¿¡æ¯...")
+        logging.warning(u"è¯·ç¡®è®¤ IE ä¸­è®¾ç½®ä¸ºè‡ªåŠ¨ç™»é™†!")
         import win32com.client
         bro = win32com.client.Dispatch("InternetExplorer.Application")
         # show window
@@ -554,18 +558,18 @@ class HappyFarm(object):
             else:
                 return res
         except urllib2.URLError, err:
-            logging.warning("»ñÈ¡ URL ·¢Éú´íÎó: %s.", err)
-            logging.warning("ÖØÊÔ......")
+            logging.warning(u"è·å– URL å‘ç”Ÿé”™è¯¯: %s.", err)
+            logging.warning(u"é‡è¯•......")
             return self.request(url, data, jsonFormat)
         except KeyboardInterrupt:
-            logging.error("ÓÃ»§´ò¶Ï!")
+            logging.error(u"ç”¨æˆ·æ‰“æ–­!")
             exit(-1)
         except socket.error, err:
-            logging.warning("socket ·¢Éú´íÎó: %s.", err)
-            logging.warning("ÖØÊÔ......")
+            logging.warning(u"socket å‘ç”Ÿé”™è¯¯: %s.", err)
+            logging.warning(u"é‡è¯•......")
             return self.request(url, data, jsonFormat)
         except ValueError, err:
-            logging.warning("JSON ¸ñÊ½·¢Éú´íÎó: %s.", err)
+            logging.warning(u"JSON æ ¼å¼å‘ç”Ÿé”™è¯¯: %s.", err)
             return self.request(url, data, jsonFormat)
         
     
@@ -591,14 +595,14 @@ class HappyFarm(object):
 
 
 __doc__ = ('='*80 + \
-"""                ÉËĞÄÅ©Ãñ %s(%s) for renren.com
-                    By ÍõÃ¨Ã¨(andelf@gmail.com)
+u"""                ä¼¤å¿ƒå†œæ°‘ %s(%s) for renren.com
+                    By ç‹çŒ«çŒ«(andelf@gmail.com)
                     Sat Aug 29 17:59:50 2009
-                 #Ê¹ÓÃ±¾³ÌĞòËùÒıÆğµÄÈÎºÎºó¹û, ±¾ÈË²»¸ºÔğ#
-                      Çë²»ÒªÆµ·±Ö´ĞĞ, ·ÀÖ¹±»·âºÅ!
-                  Ê¹ÓÃ·½·¨:
-                       1> Ö±½ÓÔËĞĞ
-                       2> ²ì¿´°ïÖú --help
+                 #ä½¿ç”¨æœ¬ç¨‹åºæ‰€å¼•èµ·çš„ä»»ä½•åæœ, æœ¬äººä¸è´Ÿè´£#
+                      è¯·ä¸è¦é¢‘ç¹æ‰§è¡Œ, é˜²æ­¢è¢«å°å·!
+                  ä½¿ç”¨æ–¹æ³•:
+                       1> ç›´æ¥è¿è¡Œ
+                       2> å¯Ÿçœ‹å¸®åŠ© --help
 """ + '='*80) % (__VERSION__, __DEV_STATUS__, )
 
 
@@ -611,27 +615,27 @@ if __name__ == '__main__':
     parser = OptionParser(usage=usage, version="%prog " + __VERSION__)
     parser.add_option("-f", "--log", "--log-file", default="./farmer.log",
                       action="store", type="string", dest="logfile", metavar="FILENAME",
-                      help=u"¼ÇÂ¼ÈÕÖ¾ÎÄ¼şÃû. Ä¬ÈÏÎª farmer.log.")
+                      help=u"è®°å½•æ—¥å¿—æ–‡ä»¶å. é»˜è®¤ä¸º farmer.log.")
     parser.add_option("-c", "--cache", "--cache-file", default="./farmer.cache",
                       action="store", type="string", dest="cacheFile", metavar="FILENAME",
-                      help=u"»º´æÎÄ¼şÃû. Ä¬ÈÏÎª farmer.chche")
+                      help=u"ç¼“å­˜æ–‡ä»¶å. é»˜è®¤ä¸º farmer.chche")
     parser.add_option("-u", "--user", "--username", "--email",
                       action="store", type="string", dest="email", metavar="EMAIL",
-                      help=u"ÓÃ»§ email, »òÕßÊÖ»úºÅ.")
+                      help=u"ç”¨æˆ· email, æˆ–è€…æ‰‹æœºå·.")
     parser.add_option("-p", "--pass", "--password",
                       action="store", type="string", dest="password", metavar="PASSWORD",
-                      help=u"ÓÃ»§ÃÜÂë.")
+                      help=u"ç”¨æˆ·å¯†ç .")
     parser.add_option("-t", "--timeout", "--time-out", default=10.0,
                       action="store", type="float", dest="timeout", metavar="TIME(s)",
-                      help=u"ÍøÂçÁ¬½Ó³¬Ê±, Ä¬ÈÏÎª 10 Ãë.")
+                      help=u"ç½‘ç»œè¿æ¥è¶…æ—¶, é»˜è®¤ä¸º 10 ç§’.")
     parser.add_option("-e", "--enable",
                       action="append", dest="farmOption", metavar="TERM",
                       choices=setableTerms, default=[],
-                      help=u"´ò¿ªÉèÖÃ TERM. ²Î¼ûÉèÖÃÁĞ±í.")
+                      help=u"æ‰“å¼€è®¾ç½® TERM. å‚è§è®¾ç½®åˆ—è¡¨.")
     parser.add_option("-d", "--disable", "--no",
                       action="append", dest="farmOptionDisable", metavar="TERM",
                       choices=setableTerms, default=[],
-                      help=u"¹Ø±ÕÉèÖÃ TERM. ÓÅÏÈ¼¶¸ßÓÚ -e.")
+                      help=u"å…³é—­è®¾ç½® TERM. ä¼˜å…ˆçº§é«˜äº -e.")
     (options, args) = parser.parse_args()
     
     for op in options.farmOption:
@@ -641,7 +645,7 @@ if __name__ == '__main__':
     defaultConfig['cache-file'] = options.cacheFile
     socket.setdefaulttimeout(options.timeout)
     # set logging
-    print "ÈÕÖ¾Ğ´Èëµ½ %s." % options.logfile 
+    print u"æ—¥å¿—å†™å…¥åˆ° %s." % options.logfile 
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s %(levelname)s: %(message)s',
                         datefmt='%Y %b %d %H:%M:%S',
@@ -653,9 +657,8 @@ if __name__ == '__main__':
     console.setFormatter(formatter)
     logging.getLogger('').addHandler(console)
 
-    logging.info("================ ³ÌĞòÆô¶¯ ==================")
+    logging.info(u"================ ç¨‹åºå¯åŠ¨ ==================")
     h = HappyFarm(options.email, options.password)
     
     h.runSimple()
-#     system('pause')
 
