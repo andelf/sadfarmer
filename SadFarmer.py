@@ -4,7 +4,7 @@
 #  Author      : WangMaoMao
 #  Created     : Tue Aug 25 19:15:47 2009 by Feather.et.ELF 
 #  Description : 校内(人人)开心农场辅助工具 伤心农民 0.1.8
-#  Time-stamp: <2009-09-09 11:07:37 andelf> 
+#  Time-stamp: <2009-09-22 18:50:44 andelf> 
 
 # fix py2.6 logging codec error
 import os
@@ -38,7 +38,7 @@ except:
     import Pickle
 
 __VERSION__ = '0.1.8'
-__DEV_STATUS__ = ['development', 'beta', 'release'][1] # always modify this
+__DEV_STATUS__ = ['development', 'beta', 'release'][2] # always modify this
 
 defaultConfig = {"help-friends" : True,
                  "steal" : True,
@@ -85,7 +85,6 @@ class HappyFarm(object):
                 cookie = self.getCookieViaCOM()
             except :
                 logging.error(u"无法通过 COM 连接获得用户信息!")
-                system('pause')
                 exit(-1)
             self.opener.addheaders += [ ('Cookie', cookie) ]
         if self.config['hide-username']:
@@ -133,7 +132,7 @@ class HappyFarm(object):
         res = self.request( self.buildUrl('Package', 'getPackageInfo') )
         logging.info(u"更新背包信息 类型1(种子).")
         for i in res.get('1', []):  # May fail, so use get() 
-            logging.info(u"%s %d 个", i['cName'].encode('CODEC'), int(i['amount']) )
+            logging.info(u"%s %d 个", i['cName'].encode(CODEC), int(i['amount']) )
         self._packageInfo = res.get('1', [])
         
     def _readCache(self, key=None):
@@ -345,7 +344,19 @@ class HappyFarm(object):
         if self._stateChanged and autoRefresh:
             self.updateFarm(ownerId)
         self._stateChanged = False
-            
+
+    def reclaim(self ): # 开垦
+        ownerId = self._uid
+        level = self.id2level(ownerId)
+        if ((level-3)/2)> len(self._farmlandsStatus[ownerId])-6:
+            logging.info(u"可以开垦新地.")
+            moneyNeeded = (level-4)*10000
+            if int(self.userDict[ownerId]['money']) < moneyNeeded:
+                logging.warning(u"金钱不足, 无法开垦, 需要 %d", moneyNeeded)
+                return
+            res = self.request( self.buildUrl('user', 'reclaim') )
+            self.log(res)
+            self.updateFarm() # update myself 
     def scrounge(self, ownerId, autoRefresh=True): # 偷菜
         if ownerId == self._uid or ownerId == 235795214:
             return # 不偷自己的
@@ -510,9 +521,10 @@ class HappyFarm(object):
         return '\n'.join(detail)
     def login(self, email, password):
         logging.info(u"模拟页面登陆... 用户: %s.", email)
-        url = "http://login.renren.com/Login.do"
+        url = "http://passport.renren.com/PLogin.do" # 9.22 modify
         data = {'email' : email,
                 'password' :  password,
+                'domain'   : 'renren.com',
                 'origURL' : "http://apps.renren.com/happyfarm" }
         res = self.request(url, data, jsonFormat=False)
         url = re.findall(r'id="iframe_canvas" src="([^"]+)"', res) # BUG fixed
@@ -521,8 +533,7 @@ class HappyFarm(object):
             exit(-1)
         url = url[0]
         url = url.replace('amp;', '').replace('?', '/?')
-        logging.debug(url)
-        # req.add_header("Referer", "http://apps.renren.com/happyfarm?origin=104")        
+        logging.info("登录成功")
         self.request(url, jsonFormat=False)
         
     def getCookieViaCOM(self, visible = False):
@@ -595,9 +606,9 @@ class HappyFarm(object):
 
 
 __doc__ = ('='*80 + \
-u"""                伤心农民 %s(%s) for renren.com
+u"""\n              伤心农民 %s(%s) for renren.com
                     By 王猫猫(andelf@gmail.com)
-                    Sat Aug 29 17:59:50 2009
+                    Tue Sep 22 18:49:15 2009
                  #使用本程序所引起的任何后果, 本人不负责#
                       请不要频繁执行, 防止被封号!
                   使用方法:
